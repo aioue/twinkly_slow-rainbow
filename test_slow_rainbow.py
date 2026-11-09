@@ -17,45 +17,57 @@ _spec = importlib.util.spec_from_file_location("slow_rainbow", Path(__file__).wi
 c120 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(c120)
 
-# slow-rainbow_xled-plus.py has no unit tests in this file.
+# slow-rainbow_xled-plus.py has no unit tests in this file. The notes below
+# record what has been checked, as of 2026-11-09. Numbers match the list in
+# the previous version of this note.
 #
-# Status (2026-11-09): it has run on the bedroom string. It uploaded with
-# --delete-existing-movies and printed the progress lines, skipped and played a
-# stored movie, and refused when a movie was stored without a flag. The
-# controller returns unique_id in upper case, and the script compares it
-# without case. The list below was written before those runs and is not
-# updated item by item. What was checked, by hand, against stubs only:
-#   - The movie bytes match c120.encode_movie for 250 LEDs, except 62 of
-#     2,160,000 bytes that differ by 1 (float rounding at n + 0.5 ties).
-#   - The skip / --append / --delete-existing-movies paths, with a fake
+# Run on the bedroom string: the upload with --delete-existing-movies, twice,
+# with progress lines; a plain --yes that found the stored movie and played it
+# without uploading; a refusal when a movie was stored without a flag;
+# read-only runs; and a 3-second play followed by mode off.
+#
+# Tested on the string:
+#   1. The controller keeps unique_id and returns it in GET movies, in upper
+#      case. The script compares it without case. The skip path matched.
+#   3. set_movies_new + set_movies_full + show_movie(id) plays the new movie.
+#      The mode read back as movie after upload, and set_brightness(80) was
+#      accepted.
+#   5. --delete-existing-movies removes the stored movie, and the next upload
+#      works straight after.
+#   6. Skip path: plain --yes on the stored movie played it without an upload.
+#      Mode went from off to movie. The dimmer read 80% afterwards.
+#  11. The xled path stored the movie at the fps it sent, 18, with a 55 ms frame
+#      delay. The Nov 1 upload by slow-rainbow.py was stored at 17 fps with 56 ms.
+#
+# Tested offline:
+#   - Movie bytes against the slow-rainbow.py encoder for 250 LEDs: 62 of
+#     2,160,000 bytes differ, each by 1 (rounding at n + 0.5 ties). The white
+#     byte is 0 on every LED, so make_pixel packs (0, r, g, b).   [part of 9]
+#   - --circular changes the bytes and the id. The default output equals
+#     circular=False.
+#   - Upload progress: the wrapper sends every byte with the right
+#     Content-Length, and prints 10% to 100%.
+#   - The skip / --append / --delete-existing-movies branches, with a fake
 #     HighControlInterface that records calls.
 #
-# Not tested, and assumed:
-#   1. The controller keeps the unique_id we send in movies/new and returns it
-#      in GET movies. The skip-if-unchanged feature depends on this. If it does
-#      not, every run uploads.
-#   2. gestalt movie_capacity is the same total that available_frames counts
-#      against, so "<used>/<total> frames used (<free> free)" is right.
-#   3. set_movies_new + set_movies_full + show_movie(id) leave the string
-#      playing the new movie, and set_brightness(80) is accepted afterwards.
-#   4. --append: uploading while another movie plays does not change playback
-#      until show_movie(id) selects the new one.
-#   5. --delete-existing-movies: clear_movies() deletes every movie on the
-#      string, and the next upload works straight after.
-#   6. Skip path: show_movie(id) on an already-stored movie switches to movie
-#      mode without re-uploading or touching the dimmer.
-#   7. Firmware before 2.5.6 and family D (one slot, no movie list): the
-#      show_movie(movie, fps, name) fallback works, and nothing can be
-#      detected or protected.
-#   8. xled_plus's HighControlInterface constructor logs in, which ends any
-#      other app's session, as slow-rainbow.py's inspect does. Not checked on hardware.
-#   9. make_pixel produces rgbw bytes with white 0 for an RGBW string. Only
-#      checked through a stub with a fixed layout, not a real two-string device.
-#  10. CIRCULAR = True (strings in opposite directions) is untested.
-#  11. The 18 fps vs 17 fps stored-rate behaviour seen with slow-rainbow.py on firmware
-#      2.9.1 has not been compared through xled_plus, which sends fps only.
-#  12. Python versions other than 3.14 and xled / xled_plus versions other than
-#      the PR 33 checkout.
+# Partly tested:
+#   2. The device reports movie_capacity 4026, and 1861 free with one 2160-frame
+#      movie stored. So 2165 frames count as used. The 5-frame difference is not
+#      explained.
+#   8. The xled login works from this Mac. Whether it ends another app's session
+#      was not checked, because the Twinkly app was not open.
+#   9. The white byte and colour order are checked offline and by eye. The string
+#      looks right. There is no controller readback of the movie bytes.
+#  12. Tested with Python 3.12, xled 0.7.0, and xled_plus from origin/c120-sample
+#      (b4b25e3). Other Python or xled versions are untested.
+#
+# Not tested:
+#   4. --append: needs 2160 free frames. The string had 1861 free, so it refused.
+#   7. Firmware before 2.5.6 and family D (one slot, no movie list). The string
+#      is firmware 2.9.1, family G.
+#  10. --circular on the string. Only the bytes and the id were checked. Wiring
+#      matters: the sample's header says this string's two strings run in the
+#      same direction.
 
 
 class Handler(BaseHTTPRequestHandler):
