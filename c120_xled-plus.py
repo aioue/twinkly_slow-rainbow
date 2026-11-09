@@ -14,6 +14,13 @@ merged, install it with the PR's sample if you want to compare:
     python3 c120_xled-plus.py HOST --yes    # upload and play (refuses if a movie is stored)
     python3 c120_xled-plus.py HOST --yes --overwrite   # delete stored movies, then upload
     python3 c120_xled-plus.py HOST --yes --append      # keep stored movies, add C.120 and play it
+    python3 c120_xled-plus.py HOST --yes --force       # upload again even if C.120 is already stored
+
+The movie's unique_id on the string is a UUID derived from a hash of its bytes
+(plus fps and LED count). If a stored movie carries that id, the script does not
+upload again: it only plays it. Change the colours, speed or LED count and the id
+changes, so the next run uploads. The string offers no way to read a movie back,
+so this trusts the id. The dimmer is left alone on a skip.
 
 Differences from the upstream sample:
 - By default it will not upload over a stored movie. HighControlInterface.show_movie
@@ -29,7 +36,9 @@ Differences from the upstream sample:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
+import uuid
 from colorsys import hsv_to_rgb
 
 SECONDS = 120
@@ -59,6 +68,19 @@ def make_movie(ctr):
     )
 
 
+def movie_id_for(data: bytes, fps: int, leds: int) -> str:
+    digest = hashlib.sha256(data).hexdigest()
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"c120-xled-plus:{digest}:{fps}:{leds}"))
+
+
+def upload_with_id(ctr, movie, uid: str) -> int:
+    """Like HighControlInterface.upload_movie, but with our own unique_id. Returns the movie slot id."""
+    res = ctr.set_movies_new(MOVIE_NAME, uid, ctr.led_profile.lower() + "_raw", ctr.num_leds, FRAMES, FPS)
+    movie.seek(0)
+    ctr.set_movies_full(movie)
+    return res["id"]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Upload C.120 to a Twinkly string with xled_plus.")
     parser.add_argument("host", help="the string's IP address")
@@ -66,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--overwrite", action="store_true", help="delete stored movies, then upload")
     group.add_argument("--append", action="store_true", help="keep stored movies and add C.120")
+    parser.add_argument("--force", action="store_true", help="upload even if C.120 is already stored")
     args = parser.parse_args(argv)
 
     try:
@@ -81,8 +104,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"expected an RGBW string, got {ctr.led_profile}. Nothing was written.", file=sys.stderr)
         return 1
     multi = ctr.family != "D" and ctr.version >= (2, 5, 6)
-    stored = ctr.get_movies()["movies"] if multi else []
+    listing = ctr.get_movies() if multi else {"movies": []}
+    stored = listing["movies"]
     print(f"movies stored: {len(stored)}")
+
+    movie = make_movie(ctr)
+    uid = movie_id_for(movie.getvalue(), FPS, ctr.num_leds)
+    same = [m for m in stored if m.get("unique_id") == uid]
+    if same and not args.force:
+        print(f"{MOVIE_NAME} is already stored and unchanged. Nothing was uploaded.")
+        if args.yes:
+            ctr.show_movie(same[0]["id"])
+            print("Playing it. The dimmer was left as it is.")
+        else:
+            print("Re-run with --yes to play it.")
+        return 0
+
     if stored and not (args.overwrite or args.append):
         print("The string already stores a movie. Nothing was written. "
               "Pass --overwrite to delete it or --append to keep it.", file=sys.stderr)
@@ -91,20 +128,22 @@ def main(argv: list[str] | None = None) -> int:
         print("This firmware holds one movie, so --append is not possible. Use --overwrite.", file=sys.stderr)
         return 1
     if not args.yes:
-        print(f"{MOVIE_NAME}: {FRAMES} frames at {FPS} fps. Nothing was written. Re-run with --yes to upload.")
+        print(f"{MOVIE_NAME}: {FRAMES} frames at {FPS} fps, id {uid}. Nothing was written. "
+              "Re-run with --yes to upload.")
         return 0
 
-    movie = make_movie(ctr)
-    if args.append:
-        movie_id = ctr.upload_movie(movie, FPS, MOVIE_NAME)
-        if movie_id is False:
-            print("Not enough free frames for C.120. Nothing was written. Use --overwrite.", file=sys.stderr)
-            return 1
-        ctr.show_movie(movie_id)
-    else:
-        if args.overwrite:
-            ctr.clear_movies()
+    if not multi:
+        # One movie slot and no list to read back, so there is no id to keep.
         ctr.show_movie(movie, FPS, MOVIE_NAME)
+    else:
+        if args.append:
+            if listing["available_frames"] - 1 < FRAMES:
+                print("Not enough free frames for C.120. Nothing was written. Use --overwrite.", file=sys.stderr)
+                return 1
+        elif args.overwrite:
+            ctr.clear_movies()
+        slot = upload_with_id(ctr, movie, uid)
+        ctr.show_movie(slot)
     ctr.set_brightness(BRIGHTNESS_PERCENT)
     print(f"Uploaded {MOVIE_NAME} and set the dimmer to {BRIGHTNESS_PERCENT}%.")
     return 0
