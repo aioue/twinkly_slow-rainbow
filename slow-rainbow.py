@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload the C.120 rainbow movie to one Twinkly RGBW string.
+"""Upload the slow rainbow movie to one Twinkly RGBW string.
 
 The movie is 2160 full-range HSV frames: two rainbows along the string, one
 revolution every 120 seconds if the controller plays the requested 18 fps.
@@ -30,7 +30,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-# C.120, the preset that was stored and left playing on a 250 RGBW string.
+# Slow rainbow, the preset that was stored and left playing on a 250 RGBW string.
 REVOLUTION_SECONDS = 120
 FPS = 18
 FRAMES = int(round(REVOLUTION_SECONDS * FPS))
@@ -313,7 +313,7 @@ def screen_gestalt(gestalt: dict) -> int:
         raise C120Error(f"number_of_led {leds} is above max_supported_led {supported}")
     capacity = _as_int(gestalt.get("movie_capacity"), "movie_capacity")
     if capacity < FRAMES:
-        raise C120Error(f"movie capacity is {capacity} frames. C.120 needs {FRAMES}")
+        raise C120Error(f"movie capacity is {capacity} frames. slow rainbow needs {FRAMES}")
     compatibility = gestalt.get("compatibility_mode")
     if isinstance(compatibility, str) and compatibility.lower() in {"disabled", "off", "false"}:
         raise C120Error("Compatibility Mode is off. Turn it on in the Twinkly app, then try again")
@@ -334,7 +334,7 @@ def screen_movies(listing: dict, leds: int) -> None:
         )
     available = listing.get("available_frames")
     if isinstance(available, int) and not isinstance(available, bool) and available < FRAMES:
-        raise C120Error(f"available_frames is {available}. C.120 needs {FRAMES}")
+        raise C120Error(f"available_frames is {available}. slow rainbow needs {FRAMES}")
     if leds * FRAMES * 4 <= 0:
         raise C120Error("refusing an empty movie")
 
@@ -407,7 +407,7 @@ def run_upload(client: Client, yes: bool) -> int:
     stored = listing["movies"]
     if len(stored) != 1 or not movie_ok(stored[0], leds):
         raise C120Error(
-            "the stored movie did not match C.120, so playback was left unchanged. "
+            "the stored movie did not match slow rainbow, so playback was left unchanged. "
             "This program will not delete the slot. Check the Twinkly app"
         )
     client.configure_and_play(leds)
@@ -422,7 +422,7 @@ def run_upload(client: Client, yes: bool) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Upload the C.120 rainbow movie to a Twinkly RGBW string. Writes only with --yes, and never deletes."
+        description="Upload the slow rainbow movie to a Twinkly RGBW string. Writes only with --yes, and never deletes."
     )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("plan", help="print the movie. Does not use the network")

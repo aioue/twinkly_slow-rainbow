@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""C.120 through xled_plus: the slow_rainbow sample, set up for one string.
+"""Slow rainbow through xled_plus: the slow_rainbow sample, set up for one string.
 
 Same movie as slow-rainbow.py (2160 frames at 18 fps, two rainbows, one revolution in
 120 seconds, white channel 0, dimmer 80%), built and uploaded with the
@@ -14,7 +14,7 @@ merged, install it with the PR's sample if you want to compare:
     python3 slow-rainbow_xled-plus.py HOST          # read the string, write nothing
     python3 slow-rainbow_xled-plus.py HOST --yes    # upload and play (refuses if a movie is stored)
     python3 slow-rainbow_xled-plus.py HOST --yes --delete-existing-movies   # delete ALL stored movies, then upload
-    python3 slow-rainbow_xled-plus.py HOST --yes --append      # keep stored movies, add C.120 and play it
+    python3 slow-rainbow_xled-plus.py HOST --yes --append      # keep stored movies, add slow rainbow and play it
     python3 slow-rainbow_xled-plus.py HOST --yes --circular    # one continuous rainbow across two opposite strings
 
 The movie's unique_id on the string is a UUID derived from a hash of its bytes
@@ -28,8 +28,8 @@ What the script does for each state of the string (add --yes to write):
     State                              Default           Options
     ---------------------------------  ----------------  ------------------------------------
     No movie stored                    upload and play   -
-    Same C.120 already stored          play, no upload   --delete-existing-movies re-uploads it
-    Changed C.120 or another movie     refuse            --append keeps it and adds C.120;
+    Same slow rainbow already stored          play, no upload   --delete-existing-movies re-uploads it
+    Changed slow rainbow or another movie     refuse            --append keeps it and adds slow rainbow;
       stored                                             --delete-existing-movies removes ALL
                                                          stored movies first
     Not enough free frames             refuse --append   --delete-existing-movies
@@ -43,7 +43,7 @@ Differences from the upstream sample:
   deletes the stored movies when the new one does not fit. This script stops
   instead, as slow-rainbow.py does, unless you pass --delete-existing-movies or --append.
 - --delete-existing-movies deletes every stored movie first. --append keeps them and stops
-  if C.120 does not fit in the free frames. Firmware before 2.5.6 and family D
+  if slow rainbow does not fit in the free frames. Firmware before 2.5.6 and family D
   hold one movie, so --append is refused there.
 - It writes only with --yes.
 - It sets the 80% dimmer after the upload, and names the movie "slow-rainbow".
@@ -117,7 +117,7 @@ def describe_storage(ctr, listing: dict, uid: str) -> str:
         return "movies stored: 0 (this firmware has one movie slot and no list)"
     lines = [f"movies stored: {len(stored)}, {frame_summary(ctr, listing)}"]
     for m in stored:
-        mark = "  <- this C.120, unchanged" if same_id(m.get("unique_id"), uid) else ""
+        mark = "  <- this slow rainbow, unchanged" if same_id(m.get("unique_id"), uid) else ""
         lines.append(
             f"  id {m.get('id')}: {m.get('name', '?')!r}, {m.get('frames_number', '?')} frames, "
             f"{m.get('fps', '?')} fps{mark}"
@@ -170,12 +170,12 @@ def upload_with_id(ctr, movie, uid: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Upload C.120 to a Twinkly string with xled_plus.")
+    parser = argparse.ArgumentParser(description="Upload slow rainbow to a Twinkly string with xled_plus.")
     parser.add_argument("host", help="the string's IP address")
     parser.add_argument("--yes", action="store_true", help="upload the movie and play it")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--delete-existing-movies", action="store_true", help="delete stored movies, then upload")
-    group.add_argument("--append", action="store_true", help="keep stored movies and add C.120")
+    group.add_argument("--append", action="store_true", help="keep stored movies and add slow rainbow")
     parser.add_argument(
         "--circular",
         action="store_true",
@@ -217,9 +217,9 @@ def main(argv: list[str] | None = None) -> int:
     if stored and not (args.delete_existing_movies or args.append):
         names = ", ".join(repr(m.get("name", "?")) for m in stored)
         print(f"The string already stores {len(stored)} other movie(s): {names}. Nothing was written.\n"
-              f"  --append                   keep them and add C.120 (needs {FRAMES} free frames; "
+              f"  --append                   keep them and add slow rainbow (needs {FRAMES} free frames; "
               f"{frame_summary(ctr, listing)})\n"
-              "  --delete-existing-movies   delete ALL stored movies, then upload C.120",
+              "  --delete-existing-movies   delete ALL stored movies, then upload slow rainbow",
               file=sys.stderr)
         return 1
     if args.append and not multi:
@@ -237,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if args.append:
             if listing["available_frames"] - 1 < FRAMES:
-                print("Not enough free frames to append C.120. Nothing was written. "
+                print("Not enough free frames to append slow rainbow. Nothing was written. "
                       "Use --delete-existing-movies to clear the stored movies first.", file=sys.stderr)
                 return 1
         elif args.delete_existing_movies:

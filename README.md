@@ -1,10 +1,10 @@
-# C.120 for Twinkly
+# Slow rainbow for Twinkly
 
 ![Preview: 480 frames at 4 fps, one revolution in 120 seconds](preview.gif)
 
 
 
-C.120 is a rainbow movie for a Twinkly RGBW string. Two rainbows run along the LEDs. The file is 2160 frames at 18 fps, so one pass through the colour wheel takes two minutes if the string plays that frame rate. The white channel is left off. After the upload, the controller plays the movie with this computer off.
+Slow rainbow is a rainbow movie for a Twinkly RGBW string. Two rainbows run along the LEDs. The file is 2160 frames at 18 fps, so one pass through the colour wheel takes two minutes if the string plays that frame rate. The white channel is left off. After the upload, the controller plays the movie with this computer off.
 
 An example gif of the pattern in action is above ⬆️
 
