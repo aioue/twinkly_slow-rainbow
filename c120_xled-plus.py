@@ -12,7 +12,7 @@ merged, install it with the PR's sample if you want to compare:
 
     python3 c120_xled-plus.py HOST          # read the string, write nothing
     python3 c120_xled-plus.py HOST --yes    # upload and play (refuses if a movie is stored)
-    python3 c120_xled-plus.py HOST --yes --overwrite   # delete stored movies, then upload
+    python3 c120_xled-plus.py HOST --yes --delete-existing-movies   # delete ALL stored movies, then upload
     python3 c120_xled-plus.py HOST --yes --append      # keep stored movies, add C.120 and play it
     python3 c120_xled-plus.py HOST --yes --force       # upload again even if C.120 is already stored
 
@@ -22,11 +22,27 @@ upload again: it only plays it. Change the colours, speed or LED count and the i
 changes, so the next run uploads. The string offers no way to read a movie back,
 so this trusts the id. The dimmer is left alone on a skip.
 
+What the script does for each state of the string (add --yes to write):
+
+    State                              Default           Options
+    ---------------------------------  ----------------  ------------------------------------
+    No movie stored                    upload and play   -
+    Same C.120 already stored          play, no upload   --force re-uploads (with one of the
+                                                         two flags below, as a movie is stored)
+    Changed C.120 or another movie     refuse            --append keeps it and adds C.120;
+      stored                                             --delete-existing-movies removes ALL
+                                                         stored movies first
+    Not enough free frames             refuse --append   --delete-existing-movies
+    Firmware before 2.5.6 / family D   upload, replacing --append is refused. There is no list
+      (one movie slot, no list)        the one movie     to read, so the stored movie cannot
+                                                         be seen or protected
+    Not an RGBW string                 refuse            -
+
 Differences from the upstream sample:
 - By default it will not upload over a stored movie. HighControlInterface.show_movie
   deletes the stored movies when the new one does not fit. This script stops
-  instead, as c120.py does, unless you pass --overwrite or --append.
-- --overwrite deletes every stored movie first. --append keeps them and stops
+  instead, as c120.py does, unless you pass --delete-existing-movies or --append.
+- --delete-existing-movies deletes every stored movie first. --append keeps them and stops
   if C.120 does not fit in the free frames. Firmware before 2.5.6 and family D
   hold one movie, so --append is refused there.
 - It writes only with --yes.
@@ -86,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("host", help="the string's IP address")
     parser.add_argument("--yes", action="store_true", help="upload the movie and play it")
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--overwrite", action="store_true", help="delete stored movies, then upload")
+    group.add_argument("--delete-existing-movies", action="store_true", help="delete stored movies, then upload")
     group.add_argument("--append", action="store_true", help="keep stored movies and add C.120")
     parser.add_argument("--force", action="store_true", help="upload even if C.120 is already stored")
     args = parser.parse_args(argv)
@@ -120,12 +136,16 @@ def main(argv: list[str] | None = None) -> int:
             print("Re-run with --yes to play it.")
         return 0
 
-    if stored and not (args.overwrite or args.append):
-        print("The string already stores a movie. Nothing was written. "
-              "Pass --overwrite to delete it or --append to keep it.", file=sys.stderr)
+    if stored and not (args.delete_existing_movies or args.append):
+        names = ", ".join(repr(m.get("name", "?")) for m in stored)
+        print(f"The string already stores {len(stored)} other movie(s): {names}. Nothing was written.\n"
+              "  --append                   keep them and add C.120 (needs free frames)\n"
+              "  --delete-existing-movies   delete ALL stored movies, then upload C.120",
+              file=sys.stderr)
         return 1
     if args.append and not multi:
-        print("This firmware holds one movie, so --append is not possible. Use --overwrite.", file=sys.stderr)
+        print("This firmware holds one movie, so --append is not possible. "
+              "Uploading replaces it: drop --append.", file=sys.stderr)
         return 1
     if not args.yes:
         print(f"{MOVIE_NAME}: {FRAMES} frames at {FPS} fps, id {uid}. Nothing was written. "
@@ -138,9 +158,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         if args.append:
             if listing["available_frames"] - 1 < FRAMES:
-                print("Not enough free frames for C.120. Nothing was written. Use --overwrite.", file=sys.stderr)
+                print("Not enough free frames to append C.120. Nothing was written. "
+                      "Use --delete-existing-movies to clear the stored movies first.", file=sys.stderr)
                 return 1
-        elif args.overwrite:
+        elif args.delete_existing_movies:
             ctr.clear_movies()
         slot = upload_with_id(ctr, movie, uid)
         ctr.show_movie(slot)
