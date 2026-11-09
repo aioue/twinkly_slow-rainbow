@@ -15,6 +15,7 @@ merged, install it with the PR's sample if you want to compare:
     python3 slow-rainbow_xled-plus.py HOST --yes    # upload and play (refuses if a movie is stored)
     python3 slow-rainbow_xled-plus.py HOST --yes --delete-existing-movies   # delete ALL stored movies, then upload
     python3 slow-rainbow_xled-plus.py HOST --yes --append      # keep stored movies, add C.120 and play it
+    python3 slow-rainbow_xled-plus.py HOST --yes --circular    # one continuous rainbow across two opposite strings
 
 The movie's unique_id on the string is a UUID derived from a hash of its bytes
 (plus fps and LED count). If a stored movie carries that id, the script does not
@@ -65,7 +66,9 @@ FRAMES = SECONDS * FPS
 RAINBOWS = 2
 BRIGHTNESS_PERCENT = 80
 MOVIE_NAME = "slow-rainbow"
-# Strings leaving the controller in opposite directions: one continuous rainbow.
+# Default for --circular. Strings leaving the controller in opposite directions:
+# one continuous rainbow. Off by default because the two strings here leave the
+# controller in the same direction.
 CIRCULAR = False
 
 
@@ -76,12 +79,12 @@ def rainbow_color(index: int, led_count: int, frame: int) -> tuple[int, int, int
     return (int(red * 255 + 0.5), int(green * 255 + 0.5), int(blue * 255 + 0.5))
 
 
-def make_movie(ctr):
+def make_movie(ctr, circular: bool = CIRCULAR):
     return ctr.make_func_movie(
         FRAMES,
         lambda t: ctr.make_func_pattern(
             lambda i: rainbow_color(i, ctr.num_leds, t),
-            circular=CIRCULAR,
+            circular=circular,
         ),
     )
 
@@ -173,6 +176,11 @@ def main(argv: list[str] | None = None) -> int:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--delete-existing-movies", action="store_true", help="delete stored movies, then upload")
     group.add_argument("--append", action="store_true", help="keep stored movies and add C.120")
+    parser.add_argument(
+        "--circular",
+        action="store_true",
+        help="flip the LED indices so the rainbow is one continuous pattern across two strings running in opposite directions",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -191,7 +199,8 @@ def main(argv: list[str] | None = None) -> int:
     listing = ctr.get_movies() if multi else {"movies": []}
     stored = listing["movies"]
 
-    movie = make_movie(ctr)
+    # --circular changes the bytes, so the id changes and a stored movie made without it does not match.
+    movie = make_movie(ctr, circular=args.circular)
     uid = movie_id_for(movie.getvalue(), FPS, ctr.num_leds)
     same = [m for m in stored if same_id(m.get("unique_id"), uid)]
     storage = describe_storage(ctr, listing, uid)
