@@ -46,7 +46,7 @@ JSON_LIMIT = 1_000_000
 UPLOAD_TIMEOUT = 180.0
 
 
-class C120Error(RuntimeError):
+class SlowRainbowError(RuntimeError):
     pass
 
 
@@ -115,14 +115,14 @@ class Client:
     def gestalt(self) -> dict:
         body = self._request("GET", "/xled/v1/gestalt", None, auth=False)
         if not isinstance(body, dict):
-            raise C120Error("gestalt was not an object")
+            raise SlowRainbowError("gestalt was not an object")
         return body
 
     def firmware(self) -> str:
         body = self._request("GET", "/xled/v1/fw/version", None, auth=False)
         version = body.get("version")
         if not isinstance(version, str):
-            raise C120Error(f"firmware version missing: {body}")
+            raise SlowRainbowError(f"firmware version missing: {body}")
         return version
 
     def login(self) -> None:
@@ -130,10 +130,10 @@ class Client:
         body = self._request("POST", "/xled/v1/login", {"challenge": challenge}, auth=False)
         token = body.get("authentication_token")
         if not isinstance(token, str):
-            raise C120Error("login response did not include authentication_token")
+            raise SlowRainbowError("login response did not include authentication_token")
         raw = base64.b64decode(token)
         if len(raw) != 8:
-            raise C120Error(f"authentication token decoded to {len(raw)} bytes, expected 8")
+            raise SlowRainbowError(f"authentication token decoded to {len(raw)} bytes, expected 8")
         self.token = token
         try:
             # A rejected verify must fail this login. Retrying it would log in again.
@@ -149,25 +149,25 @@ class Client:
             raise
         if verified.get("code") not in (None, 1000):
             self.token = None
-            raise C120Error(f"verify failed: {verified}")
+            raise SlowRainbowError(f"verify failed: {verified}")
 
     def movies(self) -> dict:
         body = self._request("GET", "/xled/v1/movies", None, auth=True)
         if not isinstance(body, dict) or not isinstance(body.get("movies"), list):
-            raise C120Error(f"movie list was not usable: {body}")
+            raise SlowRainbowError(f"movie list was not usable: {body}")
         return body
 
     def mode(self) -> str:
         body = self._request("GET", "/xled/v1/led/mode", None, auth=True)
         mode = body.get("mode")
         if not isinstance(mode, str):
-            raise C120Error(f"mode missing from {body}")
+            raise SlowRainbowError(f"mode missing from {body}")
         return mode
 
     def upload(self, movie: bytes, leds: int) -> dict:
         expected = FRAMES * leds * 4
         if len(movie) != expected:
-            raise C120Error(f"movie is {len(movie)} bytes, expected {expected}")
+            raise SlowRainbowError(f"movie is {len(movie)} bytes, expected {expected}")
         # No retry on these posts. A retried movies/new would create a second slot,
         # and this program will not delete it.
         created = self._request(
@@ -194,8 +194,8 @@ class Client:
                 retry=False,
                 timeout=UPLOAD_TIMEOUT,
             )
-        except C120Error as exc:
-            raise C120Error(
+        except SlowRainbowError as exc:
+            raise SlowRainbowError(
                 f"{exc}. A movie slot may now exist. This program will not delete it. "
                 "Check the Twinkly app before trying again."
             ) from exc
@@ -229,7 +229,7 @@ class Client:
         timeout: float | None = None,
     ) -> dict:
         if auth and not self.token:
-            raise C120Error(f"{method} {path} called before login")
+            raise SlowRainbowError(f"{method} {path} called before login")
         headers = {"Accept": "application/json"}
         data: bytes | None
         if isinstance(payload, bytes):
@@ -259,41 +259,41 @@ class Client:
                 self.token = None
                 self.login()
                 return self._request(method, path, payload, auth=True, octet=octet, retry=False, timeout=timeout)
-            raise C120Error(f"{method} {path} HTTP {err.code}: {detail}") from err
+            raise SlowRainbowError(f"{method} {path} HTTP {err.code}: {detail}") from err
         except TimeoutError as err:
-            raise C120Error(f"{method} {path} timed out") from err
+            raise SlowRainbowError(f"{method} {path} timed out") from err
         except urllib.error.URLError as err:
-            raise C120Error(f"{method} {path} failed: {err.reason}") from err
+            raise SlowRainbowError(f"{method} {path} failed: {err.reason}") from err
         if len(raw) > JSON_LIMIT:
-            raise C120Error(f"{method} {path} response was larger than {JSON_LIMIT} bytes")
+            raise SlowRainbowError(f"{method} {path} response was larger than {JSON_LIMIT} bytes")
         if status == 204 or not raw:
             return {}
         try:
             body = json.loads(raw)
         except json.JSONDecodeError as err:
-            raise C120Error(f"{method} {path} returned non-JSON ({len(raw)} bytes)") from err
+            raise SlowRainbowError(f"{method} {path} returned non-JSON ({len(raw)} bytes)") from err
         if not isinstance(body, dict):
-            raise C120Error(f"{method} {path} returned {type(body).__name__}")
+            raise SlowRainbowError(f"{method} {path} returned {type(body).__name__}")
         if body.get("code") not in (None, 1000):
-            raise C120Error(f"{method} {path} application code {body.get('code')}: {body}")
+            raise SlowRainbowError(f"{method} {path} application code {body.get('code')}: {body}")
         return body
 
 
 def check_host(host: str) -> str:
     if not host or len(host) > 253:
-        raise C120Error("pass the string's IP address or hostname")
+        raise SlowRainbowError("pass the string's IP address or hostname")
     labels = host.split(".")
     for label in labels:
         if not label or len(label) > 63 or label.startswith("-") or label.endswith("-"):
-            raise C120Error(f"not a hostname or IPv4 address: {host}")
+            raise SlowRainbowError(f"not a hostname or IPv4 address: {host}")
         if not all(character.isalnum() or character == "-" for character in label):
-            raise C120Error(f"not a hostname or IPv4 address: {host}")
+            raise SlowRainbowError(f"not a hostname or IPv4 address: {host}")
     return host
 
 
 def _as_int(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
-        raise C120Error(f"{label} was missing or not an integer")
+        raise SlowRainbowError(f"{label} was missing or not an integer")
     return value
 
 
@@ -302,23 +302,23 @@ def screen_gestalt(gestalt: dict) -> int:
     profile = gestalt.get("led_profile")
     bytes_per_led = _as_int(gestalt.get("bytes_per_led"), "bytes_per_led")
     if profile != "RGBW" or bytes_per_led != 4:
-        raise C120Error(
+        raise SlowRainbowError(
             f"this script sends RGBW frames. The string reported {profile}, {bytes_per_led} bytes per LED"
         )
     leds = _as_int(gestalt.get("number_of_led"), "number_of_led")
     if not 1 <= leds <= MAX_LEDS:
-        raise C120Error(f"number_of_led {leds} is outside 1..{MAX_LEDS}")
+        raise SlowRainbowError(f"number_of_led {leds} is outside 1..{MAX_LEDS}")
     supported = gestalt.get("max_supported_led")
     if isinstance(supported, int) and not isinstance(supported, bool) and leds > supported:
-        raise C120Error(f"number_of_led {leds} is above max_supported_led {supported}")
+        raise SlowRainbowError(f"number_of_led {leds} is above max_supported_led {supported}")
     capacity = _as_int(gestalt.get("movie_capacity"), "movie_capacity")
     if capacity < FRAMES:
-        raise C120Error(f"movie capacity is {capacity} frames. slow rainbow needs {FRAMES}")
+        raise SlowRainbowError(f"movie capacity is {capacity} frames. slow rainbow needs {FRAMES}")
     compatibility = gestalt.get("compatibility_mode")
     if isinstance(compatibility, str) and compatibility.lower() in {"disabled", "off", "false"}:
-        raise C120Error("Compatibility Mode is off. Turn it on in the Twinkly app, then try again")
+        raise SlowRainbowError("Compatibility Mode is off. Turn it on in the Twinkly app, then try again")
     if compatibility == 0:
-        raise C120Error("Compatibility Mode is off. Turn it on in the Twinkly app, then try again")
+        raise SlowRainbowError("Compatibility Mode is off. Turn it on in the Twinkly app, then try again")
     return leds
 
 
@@ -328,15 +328,15 @@ def screen_movies(listing: dict, leds: int) -> None:
         count = len(existing)
         noun = "movie" if count == 1 else "movies"
         pronoun = "it" if count == 1 else "them"
-        raise C120Error(
+        raise SlowRainbowError(
             f"the string already stores {count} {noun}. "
             f"Nothing was written. Delete {pronoun} in the Twinkly app first. This script will not delete {pronoun}"
         )
     available = listing.get("available_frames")
     if isinstance(available, int) and not isinstance(available, bool) and available < FRAMES:
-        raise C120Error(f"available_frames is {available}. slow rainbow needs {FRAMES}")
+        raise SlowRainbowError(f"available_frames is {available}. slow rainbow needs {FRAMES}")
     if leds * FRAMES * 4 <= 0:
-        raise C120Error("refusing an empty movie")
+        raise SlowRainbowError("refusing an empty movie")
 
 
 def movie_ok(movie: dict, leds: int) -> bool:
@@ -406,7 +406,7 @@ def run_upload(client: Client, yes: bool) -> int:
     listing = client.movies()
     stored = listing["movies"]
     if len(stored) != 1 or not movie_ok(stored[0], leds):
-        raise C120Error(
+        raise SlowRainbowError(
             "the stored movie did not match slow rainbow, so playback was left unchanged. "
             "This program will not delete the slot. Check the Twinkly app"
         )
@@ -438,12 +438,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "plan":
             return run_plan()
         if not 1 <= args.port <= 65535:
-            raise C120Error("--port must be 1..65535")
+            raise SlowRainbowError("--port must be 1..65535")
         client = Client(check_host(args.host), args.port)
         if args.command == "inspect":
             return run_inspect(client)
         return run_upload(client, args.yes)
-    except C120Error as exc:
+    except SlowRainbowError as exc:
         print(str(exc), file=sys.stderr)
         return 1
     except (OSError, ValueError) as exc:
