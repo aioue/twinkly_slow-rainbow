@@ -37,7 +37,7 @@ FRAMES = int(round(REVOLUTION_SECONDS * FPS))
 FRAME_DELAY_MS = int(round(1000 / FPS))
 RAINBOW_COUNT = 2
 BRIGHTNESS_PERCENT = 80
-MOVIE_NAME = "C.120"
+MOVIE_NAME = "slow-rainbow"
 
 # A corrupt gestalt should not make this allocate a huge frame buffer.
 MAX_LEDS = 4096

@@ -44,7 +44,7 @@ Differences from the upstream sample:
   if C.120 does not fit in the free frames. Firmware before 2.5.6 and family D
   hold one movie, so --append is refused there.
 - It writes only with --yes.
-- It sets the 80% dimmer after the upload, and names the movie "C.120".
+- It sets the 80% dimmer after the upload, and names the movie "slow-rainbow".
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ FPS = 18
 FRAMES = SECONDS * FPS
 RAINBOWS = 2
 BRIGHTNESS_PERCENT = 80
-MOVIE_NAME = "C.120"
+MOVIE_NAME = "slow-rainbow"
 # Strings leaving the controller in opposite directions: one continuous rainbow.
 CIRCULAR = False
 

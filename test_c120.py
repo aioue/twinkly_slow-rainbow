@@ -110,7 +110,7 @@ class Handler(BaseHTTPRequestHandler):
             server.movie = body
             stored = {
                 "id": 0,
-                "name": "C.120",
+                "name": "slow-rainbow",
                 "descriptor_type": "rgbw_raw",
                 "leds_per_frame": 4,
                 "frames_number": 1 if server.bad_readback else c120.FRAMES,
@@ -212,7 +212,7 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(created["fps"], 18)
         self.assertEqual(created["frames_number"], 2160)
         self.assertEqual(created["leds_per_frame"], 4)
-        self.assertEqual(created["name"], "C.120")
+        self.assertEqual(created["name"], "slow-rainbow")
         self.assertEqual(len(self.server.movie), 2160 * 4 * 4)
         self.assertEqual(self.server.json_posts["/xled/v1/led/movie/config"]["frame_delay"], 56)
         self.assertEqual(self.server.json_posts["/xled/v1/led/mode"], {"mode": "movie"})
