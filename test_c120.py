@@ -10,6 +10,42 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import c120
 
+# NOT YET TESTED: c120_xled-plus.py
+#
+# c120_xled-plus.py has no unit tests in this file and has never run against a
+# real string. What was checked, by hand, against stubs only:
+#   - The movie bytes match c120.encode_movie for 250 LEDs, except 62 of
+#     2,160,000 bytes that differ by 1 (float rounding at n + 0.5 ties).
+#   - The skip / --append / --delete-existing-movies paths, with a fake
+#     HighControlInterface that records calls.
+#
+# Not tested, and assumed:
+#   1. The controller keeps the unique_id we send in movies/new and returns it
+#      in GET movies. The skip-if-unchanged feature depends on this. If it does
+#      not, every run uploads.
+#   2. gestalt movie_capacity is the same total that available_frames counts
+#      against, so "<used>/<total> frames used (<free> free)" is right.
+#   3. set_movies_new + set_movies_full + show_movie(id) leave the string
+#      playing the new movie, and set_brightness(80) is accepted afterwards.
+#   4. --append: uploading while another movie plays does not change playback
+#      until show_movie(id) selects the new one.
+#   5. --delete-existing-movies: clear_movies() deletes every movie on the
+#      string, and the next upload works straight after.
+#   6. Skip path: show_movie(id) on an already-stored movie switches to movie
+#      mode without re-uploading or touching the dimmer.
+#   7. Firmware before 2.5.6 and family D (one slot, no movie list): the
+#      show_movie(movie, fps, name) fallback works, and nothing can be
+#      detected or protected.
+#   8. xled_plus's HighControlInterface constructor logs in, which ends any
+#      other app's session, as c120.py's inspect does. Not checked on hardware.
+#   9. make_pixel produces rgbw bytes with white 0 for an RGBW string. Only
+#      checked through a stub with a fixed layout, not a real two-string device.
+#  10. CIRCULAR = True (strings in opposite directions) is untested.
+#  11. The 18 fps vs 17 fps stored-rate behaviour seen with c120.py on firmware
+#      2.9.1 has not been compared through xled_plus, which sends fps only.
+#  12. Python versions other than 3.14 and xled / xled_plus versions other than
+#      the PR 33 checkout.
+
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
