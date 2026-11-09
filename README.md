@@ -8,15 +8,21 @@ C.120 is a rainbow movie for a Twinkly RGBW string. Two rainbows run along the L
 
 An example gif of the pattern in action is above ⬆️
 
-`c120.py` talks to the string on your LAN. It uploads only when you pass `--yes`, and only when movie storage is empty. It does not delete a movie, update firmware, or change Wi-Fi. `plan` does not use the network. `inspect` and `upload` log in, which ends any other app's session on the string. The Twinkly app has to connect again.
+`slow-rainbow.py` talks to the string on your LAN. It uploads only when you pass `--yes`, and only when movie storage is empty. It does not delete a movie, update firmware, or change Wi-Fi. `plan` does not use the network. `inspect` and `upload` log in, which ends any other app's session on the string. The Twinkly app has to connect again.
 
 You need Python 3.9 or newer. There is nothing to install. On firmware 2.9 and later, Compatibility Mode has to be on. The script refuses a string that is not RGBW, a string that cannot store 2160 frames, and a string that already has a movie.
 
 ```bash
-python3 c120.py plan
-python3 c120.py inspect 192.168.1.50
-python3 c120.py upload 192.168.1.50
-python3 c120.py upload 192.168.1.50 --yes
+python3 slow-rainbow.py plan
+python3 slow-rainbow.py inspect 192.168.1.50
+python3 slow-rainbow.py upload 192.168.1.50
+python3 slow-rainbow.py upload 192.168.1.50 --yes
+```
+
+`slow-rainbow_xled-plus.py` makes the same movie through the xled_plus library. It needs `xled` and `requests_toolbelt` installed. It stores the movie as `slow-rainbow`, prints the upload progress, and warns that the string will flicker while it uploads. Its options are `--yes`, `--delete-existing-movies` (deletes every stored movie first) and `--append` (keeps stored movies and adds this one). Without a flag it refuses when a movie is already stored.
+
+```bash
+python3 slow-rainbow_xled-plus.py 192.168.1.50 --yes --delete-existing-movies
 ```
 
 Use the string's address from the Twinkly app or from your router's client list. If inspect times out, this computer cannot reach that address.
@@ -29,6 +35,6 @@ If an upload errors after it has started writing, look in the app before trying 
 
 The local API has no password. Anyone who can reach the string on the network can upload a movie.
 
-`python3 -m unittest test_c120.py` checks the encoder and a fake controller. It does not talk to a real string.
+`python3 -m unittest test_slow_rainbow.py` checks the encoder and a fake controller. It does not talk to a real string.
 
 MIT license.

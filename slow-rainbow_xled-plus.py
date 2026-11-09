@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """C.120 through xled_plus: the slow_rainbow sample, set up for one string.
 
-Same movie as c120.py (2160 frames at 18 fps, two rainbows, one revolution in
+Same movie as slow-rainbow.py (2160 frames at 18 fps, two rainbows, one revolution in
 120 seconds, white channel 0, dimmer 80%), built and uploaded with the
-xled_plus library instead of c120.py's own HTTP client. Based on
+xled_plus library instead of slow-rainbow.py's own HTTP client. The movie is
+stored as "slow-rainbow". Based on
 https://github.com/Anders-Holst/xled_plus/pull/33
 
 Needs xled_plus (https://github.com/Anders-Holst/xled_plus). Until the PR is
 merged, install it with the PR's sample if you want to compare:
     pip install xled git+https://github.com/Anders-Holst/xled_plus
 
-    python3 c120_xled-plus.py HOST          # read the string, write nothing
-    python3 c120_xled-plus.py HOST --yes    # upload and play (refuses if a movie is stored)
-    python3 c120_xled-plus.py HOST --yes --delete-existing-movies   # delete ALL stored movies, then upload
-    python3 c120_xled-plus.py HOST --yes --append      # keep stored movies, add C.120 and play it
+    python3 slow-rainbow_xled-plus.py HOST          # read the string, write nothing
+    python3 slow-rainbow_xled-plus.py HOST --yes    # upload and play (refuses if a movie is stored)
+    python3 slow-rainbow_xled-plus.py HOST --yes --delete-existing-movies   # delete ALL stored movies, then upload
+    python3 slow-rainbow_xled-plus.py HOST --yes --append      # keep stored movies, add C.120 and play it
 
 The movie's unique_id on the string is a UUID derived from a hash of its bytes
 (plus fps and LED count). If a stored movie carries that id, the script does not
@@ -39,18 +40,21 @@ What the script does for each state of the string (add --yes to write):
 Differences from the upstream sample:
 - By default it will not upload over a stored movie. HighControlInterface.show_movie
   deletes the stored movies when the new one does not fit. This script stops
-  instead, as c120.py does, unless you pass --delete-existing-movies or --append.
+  instead, as slow-rainbow.py does, unless you pass --delete-existing-movies or --append.
 - --delete-existing-movies deletes every stored movie first. --append keeps them and stops
   if C.120 does not fit in the free frames. Firmware before 2.5.6 and family D
   hold one movie, so --append is refused there.
 - It writes only with --yes.
 - It sets the 80% dimmer after the upload, and names the movie "slow-rainbow".
+- While it uploads it warns that the string will flicker, and prints progress
+  in 10% steps. The flicker stops when the upload finishes.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import sys
 import uuid
 from colorsys import hsv_to_rgb
@@ -66,7 +70,7 @@ CIRCULAR = False
 
 
 def rainbow_color(index: int, led_count: int, frame: int) -> tuple[int, int, int]:
-    """Full-saturation HSV, the same colours as c120.py."""
+    """Full-saturation HSV, the same colours as slow-rainbow.py."""
     hue = (RAINBOWS * index / led_count - frame / FRAMES) % 1.0
     red, green, blue = hsv_to_rgb(hue, 1.0, 1.0)
     return (int(red * 255 + 0.5), int(green * 255 + 0.5), int(blue * 255 + 0.5))
@@ -87,6 +91,12 @@ def movie_id_for(data: bytes, fps: int, leds: int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"c120-xled-plus:{digest}:{fps}:{leds}"))
 
 
+def same_id(stored: object, uid: str) -> bool:
+    # The string returns unique_id in upper case (A9F0...). uuid5 gives lower case.
+    # Compare without case, or the "already stored" path never matches.
+    return isinstance(stored, str) and stored.lower() == uid.lower()
+
+
 def frame_summary(ctr, listing: dict) -> str:
     """'<used>/<total> frames used (<free> free)', or just the free count if the total is unknown."""
     free = listing.get("available_frames")
@@ -104,7 +114,7 @@ def describe_storage(ctr, listing: dict, uid: str) -> str:
         return "movies stored: 0 (this firmware has one movie slot and no list)"
     lines = [f"movies stored: {len(stored)}, {frame_summary(ctr, listing)}"]
     for m in stored:
-        mark = "  <- this C.120, unchanged" if m.get("unique_id") == uid else ""
+        mark = "  <- this C.120, unchanged" if same_id(m.get("unique_id"), uid) else ""
         lines.append(
             f"  id {m.get('id')}: {m.get('name', '?')!r}, {m.get('frames_number', '?')} frames, "
             f"{m.get('fps', '?')} fps{mark}"
@@ -112,11 +122,47 @@ def describe_storage(ctr, listing: dict, uid: str) -> str:
     return "\n".join(lines)
 
 
+class UploadProgress:
+    """File-like wrapper that prints progress as requests reads the movie.
+
+    xled sends the movie in one POST, so there is no per-chunk callback. requests
+    reads a file-like body in blocks, and counting those reads gives the percentage.
+    The bytes are not changed. __len__ lets requests set Content-Length.
+    """
+
+    def __init__(self, data: bytes, step: int = 10) -> None:
+        self._buf = io.BytesIO(data)
+        self._total = len(data)
+        self._sent = 0
+        self._step = step
+        self._next = step
+
+    def __len__(self) -> int:
+        return self._total
+
+    def read(self, size: int = -1) -> bytes:
+        chunk = self._buf.read(size)
+        self._sent += len(chunk)
+        percent = self._sent * 100 // self._total if self._total else 100
+        while self._next <= 100 and percent >= self._next:
+            print(f"uploading {MOVIE_NAME}: {self._next}%", flush=True)
+            self._next += self._step
+        return chunk
+
+    def seek(self, *args) -> int:
+        return self._buf.seek(*args)
+
+    def tell(self) -> int:
+        return self._buf.tell()
+
+
 def upload_with_id(ctr, movie, uid: str) -> int:
     """Like HighControlInterface.upload_movie, but with our own unique_id. Returns the movie slot id."""
     res = ctr.set_movies_new(MOVIE_NAME, uid, ctr.led_profile.lower() + "_raw", ctr.num_leds, FRAMES, FPS)
-    movie.seek(0)
-    ctr.set_movies_full(movie)
+    # The string's LEDs flicker while the movie is written to flash, and stop when it is done.
+    print("🌈 String will flicker while uploading...", flush=True)
+    # getvalue() copies the bytes, so the progress wrapper owns its own buffer.
+    ctr.set_movies_full(UploadProgress(movie.getvalue()))
     return res["id"]
 
 
@@ -147,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
 
     movie = make_movie(ctr)
     uid = movie_id_for(movie.getvalue(), FPS, ctr.num_leds)
-    same = [m for m in stored if m.get("unique_id") == uid]
+    same = [m for m in stored if same_id(m.get("unique_id"), uid)]
     storage = describe_storage(ctr, listing, uid)
     print(storage)
     if same and not args.delete_existing_movies:

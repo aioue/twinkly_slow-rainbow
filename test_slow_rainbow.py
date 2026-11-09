@@ -8,12 +8,23 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import c120
+# slow-rainbow.py has a hyphen, so it cannot be imported by name. Load it under
+# the name the tests use.
+import importlib.util
+from pathlib import Path
 
-# NOT YET TESTED: c120_xled-plus.py
+_spec = importlib.util.spec_from_file_location("slow_rainbow", Path(__file__).with_name("slow-rainbow.py"))
+c120 = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(c120)
+
+# slow-rainbow_xled-plus.py has no unit tests in this file.
 #
-# c120_xled-plus.py has no unit tests in this file and has never run against a
-# real string. What was checked, by hand, against stubs only:
+# Status (2026-11-09): it has run on the bedroom string. It uploaded with
+# --delete-existing-movies and printed the progress lines, skipped and played a
+# stored movie, and refused when a movie was stored without a flag. The
+# controller returns unique_id in upper case, and the script compares it
+# without case. The list below was written before those runs and is not
+# updated item by item. What was checked, by hand, against stubs only:
 #   - The movie bytes match c120.encode_movie for 250 LEDs, except 62 of
 #     2,160,000 bytes that differ by 1 (float rounding at n + 0.5 ties).
 #   - The skip / --append / --delete-existing-movies paths, with a fake
@@ -37,11 +48,11 @@ import c120
 #      show_movie(movie, fps, name) fallback works, and nothing can be
 #      detected or protected.
 #   8. xled_plus's HighControlInterface constructor logs in, which ends any
-#      other app's session, as c120.py's inspect does. Not checked on hardware.
+#      other app's session, as slow-rainbow.py's inspect does. Not checked on hardware.
 #   9. make_pixel produces rgbw bytes with white 0 for an RGBW string. Only
 #      checked through a stub with a fixed layout, not a real two-string device.
 #  10. CIRCULAR = True (strings in opposite directions) is untested.
-#  11. The 18 fps vs 17 fps stored-rate behaviour seen with c120.py on firmware
+#  11. The 18 fps vs 17 fps stored-rate behaviour seen with slow-rainbow.py on firmware
 #      2.9.1 has not been compared through xled_plus, which sends fps only.
 #  12. Python versions other than 3.14 and xled / xled_plus versions other than
 #      the PR 33 checkout.
